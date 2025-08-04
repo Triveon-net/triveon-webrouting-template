@@ -2,11 +2,11 @@
 class Router {
     private $routes = [];
 
-    public function add(string $method, string $path, string $handlerFile, array $middleware = []) {
+    public function add(string $method, string $url, string $pathAlias, array $middleware = []) {
         $this->routes[] = [
             'method' => strtoupper($method),
-            'path' => $path,
-            'handler' => $handlerFile,
+            'url' => $url,
+            'path' => $pathAlias,
             'middleware' => $middleware
         ];
     }
@@ -20,7 +20,7 @@ class Router {
         foreach ($this->routes as $route) {
             if (strtoupper($requestMethod) !== $route['method']) continue;
 
-            $pattern = preg_replace('#\{([\w-]+)\}#', '(?P<\1>[^/]+)', $route['path']);
+            $pattern = preg_replace('#\{([\w-]+)\}#', '(?P<\1>[^/]+)', $route['url']);
             $pattern = "#^" . $pattern . "$#";
 
             if (preg_match($pattern, $requestPath, $matches)) {
@@ -29,29 +29,36 @@ class Router {
                     if (!is_int($key)) $_GET[$key] = $value;
                 }
 
-                // 🔐 Middleware prüfen
+                // 💡 Middleware prüfen
                 foreach ($route['middleware'] as $m) {
                     if (str_starts_with($m, 'permission:')) {
-                        $perm = explode(':', $m)[1];
-                        Middleware::permission($perm);
+                        Middleware::permission(substr($m, 11));
                     } elseif (str_starts_with($m, 'role:')) {
-                        $role = explode(':', $m)[1];
-                        Middleware::role($role);
+                        Middleware::role(substr($m, 5));
+                    } elseif ($m === 'auth') {
+                        Middleware::auth();
                     }
                 }
 
-                if (file_exists($route['handler'])) {
-                    include $route['handler'];
-                    return;
-                } else {
-                    http_response_code(500);
-                    echo "Handler-Datei nicht gefunden";
+                // 🔄 Alias zu Dateipfad umwandeln
+                $handlerFile = $this->resolvePath($route['path']);
+                if (file_exists($handlerFile)) {
+                    include $handlerFile;
                     return;
                 }
+
+                http_response_code(500);
+                echo "Handler-Datei nicht gefunden: $handlerFile";
+                return;
             }
         }
 
         http_response_code(404);
         echo "404 - Route nicht gefunden";
+    }
+
+    private function resolvePath(string $alias): string {
+        $alias = str_replace('.', '/', $alias); // z. B. 'admin.dashboard' → 'admin/dashboard'
+        return __DIR__ . "/pages/{$alias}.php"; // absoluten Pfad erzeugen
     }
 }

@@ -1,5 +1,8 @@
 <?php
 
+require_once __DIR__ . '/bootstrap.php';
+
+System::require('/AuthRedirect'); // funktioniert jetzt sicher!
 $router = require 'resources/routes.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
